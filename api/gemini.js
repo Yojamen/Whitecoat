@@ -1,14 +1,10 @@
 // File: api/gemini.js
-// Menggunakan gaya penulisan CommonJS murni yang didukung Vercel secara default
 
-module.exports = async function handler(req, res) {
-  // Ambil API Key dari Environment Variable Vercel
+export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ 
-      error: "API Key tidak ditemukan di server. Pastikan GEMINI_API_KEY sudah diatur di Environment Variables Vercel." 
-    });
+    return res.status(500).json({ error: "API Key belum diatur di Vercel Environment Variables." });
   }
 
   if (req.method !== 'POST') {
@@ -18,34 +14,27 @@ module.exports = async function handler(req, res) {
   try {
     const { contents } = req.body;
 
-    if (!contents || !contents[0]?.parts?.[0]?.text) {
-      return res.status(400).json({ error: "Format body request tidak valid atau prompt kosong." });
+    if (!contents) {
+      return res.status(400).json({ error: "Request tidak valid atau kosong." });
     }
 
-    // Panggil endpoint resmi Google Gemini API
-    const googleApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // PERBAIKAN UTAMA: Mengubah 'v1beta' menjadi 'v1' agar cocok dengan API Key berawalan AQ.
+    const googleUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    const response = await fetch(googleApiUrl, {
+    const response = await fetch(googleUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ 
-        error: data.error?.message || "Gagal mengambil respons dari Google Gemini API." 
-      });
+      return res.status(response.status).json({ error: data.error?.message || "Gagal mengambil respons dari Gemini API." });
     }
 
-    // Kembalikan hasilnya ke frontend
     return res.status(200).json(data);
-
   } catch (error) {
-    console.error("Error internal server proxy:", error);
-    return res.status(500).json({ error: `Terjadi kesalahan internal pada server proxy: ${error.message}` });
+    return res.status(500).json({ error: error.message });
   }
-};
+}
