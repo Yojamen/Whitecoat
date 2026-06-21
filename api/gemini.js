@@ -1,43 +1,48 @@
 // File: api/gemini.js
 
-export default async function handler(request, response) {
-  // Hanya izinkan metode POST
-  if (request.method !== 'POST') {
-    return response.status(405).json({ message: 'Method Not Allowed' });
+export default async function handler(req, res) {
+  // Ambil API Key dari Environment Variable Vercel
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ error: "API Key tidak ditemukan di server. Pastikan GEMINI_API_KEY sudah diatur di Environment Variables Vercel." });
   }
 
-  // Ambil API Key dari environment variable yang aman
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-
-  if (!geminiApiKey) {
-    return response.status(500).json({ error: 'API Key tidak dikonfigurasi di server.' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: "Method tidak diizinkan. Gunakan POST." });
   }
-
-  // URL API Google Gemini
-  const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
 
   try {
-    // Teruskan body dari request yang masuk ke API Gemini
-    const geminiResponse = await fetch(geminiApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request.body) // request.body sudah di-parse oleh Vercel
-    });
+    const { contents } = req.body;
 
-    if (!geminiResponse.ok) {
-      // Jika ada error dari Gemini, teruskan error tersebut
-      const errorData = await geminiResponse.json();
-      return response.status(geminiResponse.status).json({ error: 'Error dari Gemini API', details: errorData });
+    if (!contents || !contents[0]?.parts?.[0]?.text) {
+      return res.status(400).json({ error: "Format body request tidak valid atau prompt kosong." });
     }
 
-    const data = await geminiResponse.json();
-    
-    // Kirim kembali hasil yang sukses ke frontend
-    return response.status(200).json(data);
+    // Panggil langsung endpoint resmi Google Gemini API (Menggunakan model gemini-1.5-flash yang super cepat)
+    const googleApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(googleApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ contents })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: data.error?.message || "Gagal mengambil respons dari Google Gemini API." 
+      });
+    }
+
+    // Kembalikan hasilnya ke frontend
+    return res.status(200).json(data);
 
   } catch (error) {
-    return response.status(500).json({ error: 'Terjadi kesalahan internal pada proxy server.' });
+    console.error("Error internal server proxy:", error);
+    return res.status(500).json({ error: `Terjadi kesalahan internal pada server proxy: ${error.message}` });
   }
 }
